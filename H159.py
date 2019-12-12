@@ -2,6 +2,7 @@
 import math
 from copy import deepcopy
 from pprint import pprint
+import numpy as np
 
 global inputs
 inputs = ''
@@ -123,93 +124,120 @@ class Solver:
 
         return self
 
-    def add_p(self, index: str, lst: list):
+    def intelli_update(self, index: str, lst: list):
         lst2 = lst.copy()
         lst2[0], lst2[1] = lst2[1], lst2[0]
         if lst in self.predicates[index] or lst2 in self.predicates[index]:
             return
         self.predicates[index].append(lst)
 
-    def generate_seq(self, l1, l2) -> list:
+    def seq(self, l1, l2) -> list:
         return [[i, j] for i in l1 for j in l2]
 
     def parallel(self, s1, s2) -> bool:
         return [s1, s2] in self.predicates['parallel'] or [s2, s1] in self.predicates['parallel']
 
     def batch_parallel(self, l1) -> bool:
-        for i in l1:
-            if self.parallel(i[0], i[1]):
-                return True
-        return False
+        rlt = np.array([self.parallel(i[0], i[1]) for i in l1])
+        return True if np.sum(rlt) > 0 else False
 
     def perpendicular(self, s1, s2) -> bool:
         return [s1, s2] in self.predicates['perpendicular'] or [s2, s1] in self.predicates['perpendicular']
 
     def batch_perpendicular(self, l1) -> bool:
-        for i in l1:
-            if self.perpendicular(i[0], i[1]):
-                return True
-        return False
+        rlt = np.array([self.perpendicular(i[0], i[1]) for i in l1])
+        return True if np.sum(rlt) > 0 else False
 
     def equal(self, s1, s2) -> bool:
         return [s1, s2] in self.predicates['equal'] or [s2, s1] in self.predicates['equal']
 
-    def batch_equal(self, l1) -> bool:
-        for i in l1:
-            if self.equal(i[0], i[1]):
-                return True
-        return False
+    def congruent(self, s1, s2) -> bool:
+        return [s1, s2] in self.predicates['congruent'] or [s2, s1] in self.predicates['congruent']
 
-    def fraction(self, a, b) -> float:
+    def similar(self, s1, s2) -> bool:
+        return [s1, s2] in self.predicates['similar'] or [s2, s1] in self.predicates['similar']
+
+    def batch_equal(self, l1) -> bool:
+        rlt = np.array([self.equal(i[0], i[1]) for i in l1])
+        return True if np.sum(rlt) > 0 else False
+
+    def dichotomy_shuffler(self, flatten) -> list:
+        # awesome idea!
+        result = [[flatten[i], flatten[j]] for i in range(len(flatten))
+               for j in range(len(flatten)) if i > j]
+        return result
+
+    def fraction(self, s1, s2) -> float:
+        reconst = [[i[0], i[1]] for i in self.predicates['fraction']]
+        if [s1, s2] in reconst or [s2, s1] in reconst:
+            for i in self.predicates['fraction']:
+                if (s1, s2) == (i[0], i[1]) or (s2, s1) == (i[0], i[1]):
+                    return i[2]
+        return - 1
+    
+    def cont_inferer(self, list2d):
         pass
 
     # Handlers and rules
     def parallel_handler(self):
-        if self.batch_parallel(self.generate_seq(['sa2'], ['sc1', 'sa4', 'sb3', 'sa5'])):
-            self.add_p('equal', ['a6', 'b1'])
-            self.add_p('equal', ['c6', 'c3'])
+        if self.batch_parallel(self.seq(['sa2'], ['sc1', 'sa4', 'sb3', 'sa5'])):
+            self.intelli_update('equal', ['a6', 'b1'])
+            self.intelli_update('equal', ['c6', 'c3'])
 
-        if self.batch_parallel(self.generate_seq(['sa1', 'sb4', 'sc6'], ['sb2', 'sc3', 'sc5'])):
-            self.add_p('equal', ['a6', 'c2'])
+        if self.batch_parallel(self.seq(['sa1', 'sb4', 'sc6'], ['sb2', 'sc3', 'sc5'])):
+            self.intelli_update('equal', ['a6', 'c2'])
 
         if self.parallel('sb1', 'sa3') or self.parallel('sb1', 'sc4') or self.parallel('sc2', 'sa3') or self.parallel('sc2', 'sc4'):
-            self.add_p('equal', ['b2', 'c6'])
+            self.intelli_update('equal', ['b2', 'c6'])
 
     def perpendicular_handler(self):
-        if self.batch_perpendicular(self.generate_seq(['sa1', 'sb4', 'sc6'], ['sc1', 'sa4', 'sb3', 'sa5'])):
-            self.add_p('sum', ['a1', 'c1', 90])
-            self.add_p('sum', ['a4', 'b4', 90])
-        if self.batch_perpendicular(self.generate_seq(['sa3', 'sc4', 'sa6'], ['sc1', 'sa4', 'sb3', 'sa5'])):
-            self.add_p('sum', ['b3', 'a3', 90])
-            self.add_p('sum', ['a4', 'c4', 90])
-        if self.batch_perpendicular(self.generate_seq(['sa2'], ['sa1', 'sb4', 'sc6'])):
-            self.add_p('sum', ['a4', 'c6', 90])
-        if self.batch_perpendicular(self.generate_seq(['sa2'], ['sa3', 'sc4', 'sa6'])):
-            self.add_p('sum', ['a4', 'a6', 90])
-        if self.batch_perpendicular(self.generate_seq(['sb1', 'sc2', 'sb5'], ['sb2', 'sc3', 'sc5'])):
-            self.add_p('sum', ['a1', 'a3', 90])
-        if self.batch_perpendicular(self.generate_seq(['sc1', 'sb3', 'sa4', 'sa5'], ['sb2', 'sc3', 'sc5'])):
-            self.add_p('sum', ['a1', 'a2', 90])
-        if self.batch_perpendicular(self.generate_seq(['sc1', 'sb3', 'sa4', 'sa5'], ['sb1', 'sc2', 'sb5'])):
-            self.add_p('sum', ['a2', 'a3', 90])
+        if self.batch_perpendicular(self.seq(['sa1', 'sb4', 'sc6'], ['sc1', 'sa4', 'sb3', 'sa5'])):
+            self.intelli_update('sum', ['a1', 'c1', 90])
+            self.intelli_update('sum', ['a4', 'b4', 90])
+        if self.batch_perpendicular(self.seq(['sa3', 'sc4', 'sa6'], ['sc1', 'sa4', 'sb3', 'sa5'])):
+            self.intelli_update('sum', ['b3', 'a3', 90])
+            self.intelli_update('sum', ['a4', 'c4', 90])
+        if self.batch_perpendicular(self.seq(['sa2'], ['sa1', 'sb4', 'sc6'])):
+            self.intelli_update('sum', ['a4', 'c6', 90])
+        if self.batch_perpendicular(self.seq(['sa2'], ['sa3', 'sc4', 'sa6'])):
+            self.intelli_update('sum', ['a4', 'a6', 90])
+        if self.batch_perpendicular(self.seq(['sb1', 'sc2', 'sb5'], ['sb2', 'sc3', 'sc5'])):
+            self.intelli_update('sum', ['a1', 'a3', 90])
+        if self.batch_perpendicular(self.seq(['sc1', 'sb3', 'sa4', 'sa5'], ['sb2', 'sc3', 'sc5'])):
+            self.intelli_update('sum', ['a1', 'a2', 90])
+        if self.batch_perpendicular(self.seq(['sc1', 'sb3', 'sa4', 'sa5'], ['sb1', 'sc2', 'sb5'])):
+            self.intelli_update('sum', ['a2', 'a3', 90])
 
     def equal_handler(self):
         for i in self.predicates['equal']:
-            self.add_p('fraction', [i[0], i[1], 1])
+            self.intelli_update('fraction', [i[0], i[1], 1])
 
         # isosceles triangle
         for i in range(1, 5):
             if self.equal('sb{}'.format(i), 'sc{}'.format(i)):
-                self.add_p('equal', ['c{}'.format(i), 'b{}'.format(i)])
+                self.intelli_update('equal', ['c{}'.format(i), 'b{}'.format(i)])
             if self.equal('sb{}'.format(i), 'sa{}'.format(i)):
-                self.add_p('equal', ['a{}'.format(i), 'b{}'.format(i)])
+                self.intelli_update('equal', ['a{}'.format(i), 'b{}'.format(i)])
             if self.equal('sa{}'.format(i), 'sc{}'.format(i)):
-                self.add_p('equal', ['a{}'.format(i), 'c{}'.format(i)])
+                self.intelli_update('equal', ['a{}'.format(i), 'c{}'.format(i)])
+
+        # Inspected by rt
+        if self.batch_equal(self.seq(['a6'], ['b1', 'c4'])):
+            self.intelli_update('parallel', ['sa2', 'sc1'])
+        if self.batch_equal(self.seq(['c6'], ['c3', 'b4'])):
+            self.intelli_update('parallel', ['sa2', 'sc1'])
+
+        if self.batch_equal(self.seq(['c2'], ['a6'])) or self.batch_equal(self.seq(['a6'], ['c2'])):
+            self.intelli_update('parallel', ['sb2', 'sa1'])
+        if self.batch_equal(self.seq(['a4'], ['c1'])):
+            self.intelli_update('parallel', ['sc4', 'sc2'])
+        if self.batch_equal(self.seq(['a4'], ['b3'])):
+            self.intelli_update('parallel', ['sb2', 'sb4'])
 
     def fraction_handler(self):
         for i in self.predicates['fraction']:
             if i[2] == 1:
-                self.add_p('equal', [i[0], i[1]])
+                self.intelli_update('equal', [i[0], i[1]])
 
     def sum_handler(self):
         def helper(a: str, b: str, value=90):
@@ -217,11 +245,11 @@ class Solver:
 
         s = self.predicates['sum']
         if helper('a1', 'c1'):
-            self.add_p('perpendicular', ['sa1', 'sc1'])
+            self.intelli_update('perpendicular', ['sa1', 'sc1'])
         if helper('b1', 'c1'):
-            self.add_p('perpendicular', ['sb1', 'sc1'])
+            self.intelli_update('perpendicular', ['sb1', 'sc1'])
         if helper('b1', 'a1'):
-            self.add_p('perpendicular', ['sb1', 'sa1'])
+            self.intelli_update('perpendicular', ['sb1', 'sa1'])
 
     def similar_handler(self):
         pass
