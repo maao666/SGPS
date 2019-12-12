@@ -1,0 +1,3 @@
+set_parallel(sa2, sa5)
+set_equal(sc1, sb3)
+set_sum(a1,c1,90)

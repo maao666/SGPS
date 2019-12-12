@@ -1,2 +1,0 @@
-set_parallel(sb6, sa7)
-set_equal(b1, d5)
