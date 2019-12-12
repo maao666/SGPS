@@ -3,9 +3,11 @@ import math
 from copy import deepcopy
 from pprint import pprint
 import numpy as np
+from collections import Counter
 
 global inputs
 inputs = ''
+
 
 class Point:
     x, y = 0, 0
@@ -83,12 +85,12 @@ class Triangle:
 
 class Solver:
     INIT = (0, 0)
-    areas = {'ar1': INIT,
-             'ar2': INIT,
-             'ar3': INIT,
-             'ar4': INIT,
-             'ar5': INIT,
-             'ar6': INIT}
+    triangles_val = {'ar1': INIT,
+                     'ar2': INIT,
+                     'ar3': INIT,
+                     'ar4': INIT,
+                     'ar5': INIT,
+                     'ar6': INIT}
 
     segments = {'sa1': INIT, 'sb1': INIT, 'sc1': INIT,
                 'sa2': INIT, 'sb2': INIT, 'sc2': INIT,
@@ -112,6 +114,50 @@ class Solver:
                   'congruent': [],
                   'tan': []}
 
+    ar1 = {'l': 'sb1',
+           'r': 'sa1',
+           'b': 'sc1',
+           'al': 'a1',
+           'ar': 'b1',
+           'au': 'c1'}
+    ar2 = {'l': 'sc2',
+           'r': 'sb2',
+           'b': 'sa2',
+           'al': 'b2',
+           'ar': 'c2',
+           'au': 'a2'}
+    ar3 = {'l': 'sa3',
+           'r': 'sc3',
+           'b': 'sb3',
+           'al': 'c3',
+           'ar': 'a3',
+           'au': 'b3'}
+    ar4 = {'l': 'sc4',
+           'r': 'sb4',
+           'b': 'sa4',
+           'al': 'b4',
+           'ar': 'c4',
+           'au': 'a4'}
+    ar5 = {'l': 'sb5',
+           'r': 'sc5',
+           'b': 'sa5',
+           'al': 'a1',
+           'ar': 'a3',
+           'au': 'a2'}
+    ar6 = {'l': 'sa6',
+           'r': 'sc6',
+           'b': 'sa2',
+           'al': 'c6',
+           'ar': 'a6',
+           'au': 'a4'}
+
+    triangles = {'ar1': ar1,
+                 'ar2': ar2,
+                 'ar3': ar3,
+                 'ar4': ar4,
+                 'ar5': ar5,
+                 'ar6': ar6}
+
     def parse_input(self, raw_predicates: str):
         raw_predicates = raw_predicates.replace('sum_value', 'sum')
         for line in raw_predicates.splitlines():
@@ -127,7 +173,7 @@ class Solver:
     def intelli_update(self, index: str, lst: list):
         lst2 = lst.copy()
         lst2[0], lst2[1] = lst2[1], lst2[0]
-        if lst in self.predicates[index] or lst2 in self.predicates[index]:
+        if lst in self.predicates[index] or lst2 in self.predicates[index] or lst[0] == lst[1]:
             return
         self.predicates[index].append(lst)
 
@@ -164,7 +210,7 @@ class Solver:
     def dichotomy_shuffler(self, flatten) -> list:
         # awesome idea!
         result = [[flatten[i], flatten[j]] for i in range(len(flatten))
-               for j in range(len(flatten)) if i > j]
+                  for j in range(len(flatten)) if i > j]
         return result
 
     def fraction(self, s1, s2) -> float:
@@ -174,9 +220,46 @@ class Solver:
                 if (s1, s2) == (i[0], i[1]) or (s2, s1) == (i[0], i[1]):
                     return i[2]
         return - 1
+
+    def update_similar(self, ar1: str, ar2: str):
+        for k in ('l', 'r', 'b'):
+            self.intelli_update(
+                'parallel', [self.triangles[ar1][k], self.triangles[ar2][k]])
+        for k in ('al', 'ar', 'au'):
+            self.intelli_update(
+                'equal', [self.triangles[ar1][k], self.triangles[ar2][k]])
     
+    def update_congruent(self, ar1: str, ar2: str):
+        for k in ('l', 'r', 'b'):
+            self.intelli_update(
+                'equal', [self.triangles[ar1][k], self.triangles[ar2][k]])
+        for k in ('al', 'ar', 'au'):
+            self.intelli_update(
+                'equal', [self.triangles[ar1][k], self.triangles[ar2][k]])
+
     def cont_inferer(self, list2d):
-        pass
+        result = {}
+        f_result = []
+
+        def recursive_search(lists, target, depth, max_depth=6) -> list:
+            depth = depth + 1
+            result = []
+            if depth >= max_depth:
+                return result
+            for l in lists:
+                if l[0] == target:
+                    result.append(l[1])
+                    result = result + recursive_search(lists, l[1], depth)
+            return result
+
+        for i in list2d:
+            i.sort()
+
+        for i in list2d:
+            result[i[0]] = recursive_search(list2d, i[0], 0)
+        for k, v in result.items():
+            f_result.append([k] + list(v))
+        return f_result
 
     # Handlers and rules
     def parallel_handler(self):
@@ -215,11 +298,14 @@ class Solver:
         # isosceles triangle
         for i in range(1, 5):
             if self.equal('sb{}'.format(i), 'sc{}'.format(i)):
-                self.intelli_update('equal', ['c{}'.format(i), 'b{}'.format(i)])
+                self.intelli_update(
+                    'equal', ['c{}'.format(i), 'b{}'.format(i)])
             if self.equal('sb{}'.format(i), 'sa{}'.format(i)):
-                self.intelli_update('equal', ['a{}'.format(i), 'b{}'.format(i)])
+                self.intelli_update(
+                    'equal', ['a{}'.format(i), 'b{}'.format(i)])
             if self.equal('sa{}'.format(i), 'sc{}'.format(i)):
-                self.intelli_update('equal', ['a{}'.format(i), 'c{}'.format(i)])
+                self.intelli_update(
+                    'equal', ['a{}'.format(i), 'c{}'.format(i)])
 
         # Inspected by rt
         if self.batch_equal(self.seq(['a6'], ['b1', 'c4'])):
@@ -252,10 +338,19 @@ class Solver:
             self.intelli_update('perpendicular', ['sb1', 'sa1'])
 
     def similar_handler(self):
-        pass
+        flattens = self.cont_inferer(self.predicates['similar'])
+        for item in flattens:
+            for inner_item in self.dichotomy_shuffler(item):
+                self.update_similar(item[0], item[1])
 
     def congruent_handler(self):
-        pass
+        for i in self.predicates['congruent']:
+            self.intelli_update('similar', i)
+
+        flattens = self.cont_inferer(self.predicates['congruent'])
+        for item in flattens:
+            for inner_item in self.dichotomy_shuffler(item):
+                self.update_congruent(item[0], item[1])
 
     def solve(self):
         i = 0
@@ -269,9 +364,12 @@ class Solver:
             self.fraction_handler()
             self.sum_handler()
             self.similar_handler()
+            self.congruent_handler()
             diffkeys = [
                 k for k in self.prev_predicates if self.prev_predicates[k] != self.predicates[k]]
             if not len(diffkeys):
+                for i in self.predicates['congruent']:
+                    self.predicates['similar'].remove(i)
                 break
 
 
@@ -292,7 +390,8 @@ def set_equal(name1, name2):
 
 def set_fraction(name1, name2, frac):
     global inputs
-    inputs = inputs + 'set_fraction({},{},{})\n'.format(name1, name2, str(frac))
+    inputs = inputs + \
+        'set_fraction({},{},{})\n'.format(name1, name2, str(frac))
 
 
 def set_sum_value(name1, name2, sum_val):
@@ -305,6 +404,7 @@ def set_similar(name1, name2):
     global inputs
     inputs = inputs + 'set_similar({},{})\n'.format(name1, name2)
 
+
 def set_congruent(name1, name2):
     global inputs
     inputs = inputs + 'set_congruent({},{})\n'.format(name1, name2)
@@ -313,6 +413,7 @@ def set_congruent(name1, name2):
 def set_tan(name1, name2):
     global inputs
     inputs = inputs + 'set_tan({},{})\n'.format(name1, name2)
+
 
 def get_all():
     global inputs
