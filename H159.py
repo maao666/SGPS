@@ -1,4 +1,6 @@
 #!/usr/local/bin/python3
+# Created by Mason Ma
+
 import math
 from copy import deepcopy
 from pprint import pprint
@@ -84,27 +86,6 @@ class Triangle:
 
 
 class Solver:
-    INIT = (0, 0)
-    triangles_val = {'ar1': INIT,
-                     'ar2': INIT,
-                     'ar3': INIT,
-                     'ar4': INIT,
-                     'ar5': INIT,
-                     'ar6': INIT}
-
-    segments = {'sa1': INIT, 'sb1': INIT, 'sc1': INIT,
-                'sa2': INIT, 'sb2': INIT, 'sc2': INIT,
-                'sa3': INIT, 'sb3': INIT, 'sc3': INIT,
-                'sa4': INIT, 'sb4': INIT, 'sc4': INIT,
-                'sa5': INIT, 'sb5': INIT, 'sc5': INIT,
-                'sa6': INIT, 'sc6': INIT}
-
-    angles = {'a1': INIT, 'b1': INIT, 'c1': INIT,
-              'a2': INIT, 'b2': INIT, 'c2': INIT,
-              'a3': INIT, 'b3': INIT, 'c3': INIT,
-              'a4': INIT, 'b4': INIT, 'c4': INIT,
-              'a6': INIT, 'c6': INIT}
-
     predicates = {'parallel': [],
                   'perpendicular': [],
                   'equal': [],
@@ -157,6 +138,50 @@ class Solver:
                  'ar4': ar4,
                  'ar5': ar5,
                  'ar6': ar6}
+    pe_map = [{'seq': (['sa1', 'sb4', 'sc6'], ['sc1', 'sa4', 'sb3', 'sa5']),
+               'u': [['sum', ['a1', 'c1', 90]], ['sum', ['a4', 'b4', 90]]]},
+              {'seq': (['sa3', 'sc4', 'sa6'], ['sc1', 'sa4', 'sb3', 'sa5']),
+               'u': [['sum', ['b3', 'a3', 90]], ['sum', ['a4', 'c4', 90]]]},
+              {'seq': (['sa2'], ['sa1', 'sb4', 'sc6']),
+               'u': [['sum', ['a4', 'c6', 90]]]},
+              {'seq': (['sa2'], ['sa3', 'sc4', 'sa6']),
+               'u': [['sum', ['a4', 'c6', 90]]]},
+              {'seq': (['sb1', 'sc2', 'sb5'], ['sb2', 'sc3', 'sc5']),
+               'u': [['sum', ['a1', 'a3', 90]]]},
+              {'seq': (['sc1', 'sb3', 'sa4', 'sa5'], ['sb2', 'sc3', 'sc5']),
+               'u': [['sum', ['a1', 'a2', 90]]]},
+              {'seq': (['sc1', 'sb3', 'sa4', 'sa5'], ['sb1', 'sc2', 'sb5']),
+               'u': [['sum', ['a2', 'a3', 90]]]}
+              ]
+    pa_map = [{'seq': (['sa2'], ['sc1', 'sa4', 'sb3', 'sa5']),
+               'u': [['equal', ['a6', 'b1']], ['equal', ['c6', 'c3']]]},
+              {'seq': (['sa1', 'sb4', 'sc6'], ['sb2', 'sc3', 'sc5']),
+               'u': [['equal', ['a6', 'c2']]]},
+              {'seq': (['sb1'], ['sa3']),
+               'u': [['equal', ['b2', 'c6']]]},
+              {'seq': (['sb1'], ['sc4']),
+               'u': [['equal', ['b2', 'c6']]]},
+              {'seq': (['sc2'], ['sa3']),
+               'u': [['equal', ['b2', 'c6']]]},
+              {'seq': (['sc2'], ['sc4']),
+               'u': [['equal', ['b2', 'c6']]]}
+              ]
+    sp_map = [['a1', 'c1', ['sa1', 'sc1']],
+              ['b1', 'c1', ['sb1', 'sc1']],
+              ['b1', 'a1', ['sb1', 'sa1']]]
+    alt_ang_map = [{'seq': (['a6'], ['b1', 'c4']),
+                    'u': [['parallel', ['sa2', 'sc1']]]},
+                   {'seq': (['c6'], ['c3', 'b4']),
+                    'u': [['parallel', ['sa2', 'sc1']]]},
+                   {'seq': (['c2'], ['a6']),
+                    'u': [['parallel', ['sb2', 'sa1']]]},
+                   {'seq': (['a6'], ['c2']),
+                    'u': [['parallel', ['sb2', 'sa1']]]},
+                   {'seq': (['a4'], ['c1']),
+                    'u': [['parallel', ['sc4', 'sc2']]]},
+                   {'seq': (['a4'], ['b3']),
+                    'u': [['parallel', ['sb2', 'sb4']]]}
+                   ]
 
     def parse_input(self, raw_predicates: str):
         raw_predicates = raw_predicates.replace('sum_value', 'sum')
@@ -176,6 +201,10 @@ class Solver:
         if lst in self.predicates[index] or lst2 in self.predicates[index] or lst[0] == lst[1]:
             return
         self.predicates[index].append(lst)
+
+    def clean_up(self):
+        for i in self.predicates['congruent']:
+            self.predicates['similar'].remove(i)
 
     def seq(self, l1, l2) -> list:
         return [[i, j] for i in l1 for j in l2]
@@ -228,7 +257,7 @@ class Solver:
         for k in ('al', 'ar', 'au'):
             self.intelli_update(
                 'equal', [self.triangles[ar1][k], self.triangles[ar2][k]])
-    
+
     def update_congruent(self, ar1: str, ar2: str):
         for k in ('l', 'r', 'b'):
             self.intelli_update(
@@ -237,59 +266,42 @@ class Solver:
             self.intelli_update(
                 'equal', [self.triangles[ar1][k], self.triangles[ar2][k]])
 
+    def recursive_search(self, lists, target, depth, max_depth=6) -> list:
+        depth = depth + 1
+        result = []
+        if depth >= max_depth:
+            return result
+        for l in lists:
+            if l[0] == target:
+                result.append(l[1])
+                result = result + self.recursive_search(lists, l[1], depth)
+        return result
+
     def cont_inferer(self, list2d):
         result = {}
         f_result = []
-
-        def recursive_search(lists, target, depth, max_depth=6) -> list:
-            depth = depth + 1
-            result = []
-            if depth >= max_depth:
-                return result
-            for l in lists:
-                if l[0] == target:
-                    result.append(l[1])
-                    result = result + recursive_search(lists, l[1], depth)
-            return result
 
         for i in list2d:
             i.sort()
 
         for i in list2d:
-            result[i[0]] = recursive_search(list2d, i[0], 0)
+            result[i[0]] = self.recursive_search(list2d, i[0], 0)
         for k, v in result.items():
             f_result.append([k] + list(v))
         return f_result
 
     # Handlers and rules
     def parallel_handler(self):
-        if self.batch_parallel(self.seq(['sa2'], ['sc1', 'sa4', 'sb3', 'sa5'])):
-            self.intelli_update('equal', ['a6', 'b1'])
-            self.intelli_update('equal', ['c6', 'c3'])
-
-        if self.batch_parallel(self.seq(['sa1', 'sb4', 'sc6'], ['sb2', 'sc3', 'sc5'])):
-            self.intelli_update('equal', ['a6', 'c2'])
-
-        if self.parallel('sb1', 'sa3') or self.parallel('sb1', 'sc4') or self.parallel('sc2', 'sa3') or self.parallel('sc2', 'sc4'):
-            self.intelli_update('equal', ['b2', 'c6'])
+        for data in self.pa_map:
+            if self.batch_parallel(self.seq(data['seq'][0], data['seq'][1])):
+                for i in data['u']:
+                    self.intelli_update(i[0], i[1])
 
     def perpendicular_handler(self):
-        if self.batch_perpendicular(self.seq(['sa1', 'sb4', 'sc6'], ['sc1', 'sa4', 'sb3', 'sa5'])):
-            self.intelli_update('sum', ['a1', 'c1', 90])
-            self.intelli_update('sum', ['a4', 'b4', 90])
-        if self.batch_perpendicular(self.seq(['sa3', 'sc4', 'sa6'], ['sc1', 'sa4', 'sb3', 'sa5'])):
-            self.intelli_update('sum', ['b3', 'a3', 90])
-            self.intelli_update('sum', ['a4', 'c4', 90])
-        if self.batch_perpendicular(self.seq(['sa2'], ['sa1', 'sb4', 'sc6'])):
-            self.intelli_update('sum', ['a4', 'c6', 90])
-        if self.batch_perpendicular(self.seq(['sa2'], ['sa3', 'sc4', 'sa6'])):
-            self.intelli_update('sum', ['a4', 'a6', 90])
-        if self.batch_perpendicular(self.seq(['sb1', 'sc2', 'sb5'], ['sb2', 'sc3', 'sc5'])):
-            self.intelli_update('sum', ['a1', 'a3', 90])
-        if self.batch_perpendicular(self.seq(['sc1', 'sb3', 'sa4', 'sa5'], ['sb2', 'sc3', 'sc5'])):
-            self.intelli_update('sum', ['a1', 'a2', 90])
-        if self.batch_perpendicular(self.seq(['sc1', 'sb3', 'sa4', 'sa5'], ['sb1', 'sc2', 'sb5'])):
-            self.intelli_update('sum', ['a2', 'a3', 90])
+        for data in self.pe_map:
+            if self.batch_perpendicular(self.seq(data['seq'][0], data['seq'][1])):
+                for i in data['u']:
+                    self.intelli_update(i[0], i[1])
 
     def equal_handler(self):
         for i in self.predicates['equal']:
@@ -308,17 +320,10 @@ class Solver:
                     'equal', ['a{}'.format(i), 'c{}'.format(i)])
 
         # Inspected by rt
-        if self.batch_equal(self.seq(['a6'], ['b1', 'c4'])):
-            self.intelli_update('parallel', ['sa2', 'sc1'])
-        if self.batch_equal(self.seq(['c6'], ['c3', 'b4'])):
-            self.intelli_update('parallel', ['sa2', 'sc1'])
-
-        if self.batch_equal(self.seq(['c2'], ['a6'])) or self.batch_equal(self.seq(['a6'], ['c2'])):
-            self.intelli_update('parallel', ['sb2', 'sa1'])
-        if self.batch_equal(self.seq(['a4'], ['c1'])):
-            self.intelli_update('parallel', ['sc4', 'sc2'])
-        if self.batch_equal(self.seq(['a4'], ['b3'])):
-            self.intelli_update('parallel', ['sb2', 'sb4'])
+        for data in self.alt_ang_map:
+            if self.batch_equal(self.seq(data['seq'][0], data['seq'][1])):
+                for i in data['u']:
+                    self.intelli_update(i[0], i[1])
 
     def fraction_handler(self):
         for i in self.predicates['fraction']:
@@ -330,12 +335,10 @@ class Solver:
             return [a, b, value] in s or [b, a, value] in s
 
         s = self.predicates['sum']
-        if helper('a1', 'c1'):
-            self.intelli_update('perpendicular', ['sa1', 'sc1'])
-        if helper('b1', 'c1'):
-            self.intelli_update('perpendicular', ['sb1', 'sc1'])
-        if helper('b1', 'a1'):
-            self.intelli_update('perpendicular', ['sb1', 'sa1'])
+        
+        for i in self.sp_map:
+            if helper(i[0], i[1]):
+                self.intelli_update('perpendicular', i[2])
 
     def similar_handler(self):
         flattens = self.cont_inferer(self.predicates['similar'])
@@ -352,10 +355,10 @@ class Solver:
             for inner_item in self.dichotomy_shuffler(item):
                 self.update_congruent(item[0], item[1])
 
-    def solve(self):
-        i = 0
-        while True:
-            i = i+1
+    def solve(self, max_epoch=1024):
+        epoch = 0
+        while epoch < max_epoch:
+            epoch += 1
             #print('iter', i)
             self.prev_predicates = deepcopy(self.predicates)
             self.parallel_handler()
@@ -368,8 +371,7 @@ class Solver:
             diffkeys = [
                 k for k in self.prev_predicates if self.prev_predicates[k] != self.predicates[k]]
             if not len(diffkeys):
-                for i in self.predicates['congruent']:
-                    self.predicates['similar'].remove(i)
+                self.clean_up()
                 break
 
 
@@ -423,6 +425,7 @@ def get_all():
 
 
 if __name__ == '__main__':
+    '''
     with open('predicates.txt', mode='r') as f:
         solver = Solver().parse_input(f.read())
         print('Initial:')
@@ -430,3 +433,5 @@ if __name__ == '__main__':
         solver.solve()
         print('\nResult:')
         pprint(solver.predicates)
+    '''
+    pprint(get_all())
