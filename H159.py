@@ -168,7 +168,10 @@ class Solver:
               ]
     sp_map = [['a1', 'c1', ['sa1', 'sc1']],
               ['b1', 'c1', ['sb1', 'sc1']],
-              ['b1', 'a1', ['sb1', 'sa1']]]
+              ['b1', 'a1', ['sb1', 'sa1']],
+              ['b3', 'a3', ['sb3', 'sa3']],
+              ['c3', 'b3', ['sb3', 'sc3']],
+              ['c3', 'a3', ['sa3', 'sc3']]]
     alt_ang_map = [{'seq': (['a6'], ['b1', 'c4']),
                     'u': [['parallel', ['sa2', 'sc1']]]},
                    {'seq': (['c6'], ['c3', 'b4']),
@@ -190,7 +193,7 @@ class Solver:
             params = [i.strip()
                       for i in line[line.index('(')+1:line.index(')')].split(',')]
             if len(params) == 3:
-                params[-1] = int(params[-1])
+                params[-1] = eval(params[-1])
             self.predicates.get(index, []).append(params)
 
         return self
@@ -205,6 +208,7 @@ class Solver:
     def clean_up(self):
         for i in self.predicates['congruent']:
             self.predicates['similar'].remove(i)
+        self.predicates['sum_value'] = self.predicates.pop('sum')
 
     def seq(self, l1, l2) -> list:
         return [[i, j] for i in l1 for j in l2]
@@ -266,6 +270,51 @@ class Solver:
             self.intelli_update(
                 'equal', [self.triangles[ar1][k], self.triangles[ar2][k]])
 
+    def regularize(self, list2d, mode='frac') -> list:
+        result = []
+        for i in list2d:
+            a = i[0:-1]
+            b = a.copy()
+            a.sort()
+            a.append((i[-1] if a == b else 1 / i[-1]) if mode=='frac' else i[-1])
+            result.append(a)
+        return result
+
+    def check_exist(self, l1: list, l2: list) -> bool:
+        l2.sort()
+        for i in l1:
+            if i[0: len(l2)] == l2:
+                return True
+        return False
+
+    def inference_engine(self, mode='frac') -> list:
+        if (mode=='frac'):
+            self.predicates['fraction'] = self.regularize(
+                self.predicates['fraction'])
+            result = self.predicates['fraction'].copy()
+            # 3 cases are needed: a,b,2 and a,c,2
+            # a,b,2 and b,c,0.5
+            for inx in range(len(self.predicates['fraction'])):
+                for inx2 in range(inx + 1, len(self.predicates['fraction'])):
+                    inf=[]
+                    if self.predicates['fraction'][inx][0] == self.predicates['fraction'][inx2][0]:
+                        inf = [self.predicates['fraction'][inx][1],
+                            self.predicates['fraction'][inx2][1],
+                            self.predicates['fraction'][inx2][-1]/self.predicates['fraction'][inx][-1]]
+                        
+                    if self.predicates['fraction'][inx][1] == self.predicates['fraction'][inx2][0]:
+                        inf = [self.predicates['fraction'][inx][0],
+                            self.predicates['fraction'][inx2][1],
+                            self.predicates['fraction'][inx][-1]*self.predicates['fraction'][inx2][-1]]
+
+                    if self.predicates['fraction'][inx][1] == self.predicates['fraction'][inx2][1]:
+                        inf = [self.predicates['fraction'][inx][0],
+                            self.predicates['fraction'][inx2][0],
+                            self.predicates['fraction'][inx][-1]/self.predicates['fraction'][inx2][-1]]
+                    if inf != [] and inf[0] != inf[1] and not self.check_exist(result, inf[0:-1]):
+                        result.append(inf)
+        return result
+
     def recursive_search(self, lists, target, depth, max_depth=6) -> list:
         depth = depth + 1
         result = []
@@ -277,7 +326,7 @@ class Solver:
                 result = result + self.recursive_search(lists, l[1], depth)
         return result
 
-    def cont_inferer(self, list2d):
+    def cont_inferer(self, list2d) -> list:
         result = {}
         f_result = []
 
@@ -326,6 +375,7 @@ class Solver:
                     self.intelli_update(i[0], i[1])
 
     def fraction_handler(self):
+        self.predicates['fraction'] = self.inference_engine()
         for i in self.predicates['fraction']:
             if i[2] == 1:
                 self.intelli_update('equal', [i[0], i[1]])
@@ -335,7 +385,7 @@ class Solver:
             return [a, b, value] in s or [b, a, value] in s
 
         s = self.predicates['sum']
-        
+
         for i in self.sp_map:
             if helper(i[0], i[1]):
                 self.intelli_update('perpendicular', i[2])
@@ -355,7 +405,7 @@ class Solver:
             for inner_item in self.dichotomy_shuffler(item):
                 self.update_congruent(item[0], item[1])
 
-    def solve(self, max_epoch=1024):
+    def solve(self, max_epoch=128):
         epoch = 0
         while epoch < max_epoch:
             epoch += 1
